@@ -1,0 +1,56 @@
+name: Refresh ASCII profile card
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-ascii-profile-card
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and validate both themes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for theme in dark light; do
+            file="${theme}_mode.svg"
+            curl -fLsS --retry 3 --retry-delay 5 --connect-timeout 15 --max-time 120 \
+              "https://gh.crafter.run/Aryan4verma?theme=${theme}&cols=140" \
+              -o "${file}.tmp"
+            test -s "${file}.tmp"
+            grep -qi '<svg' "${file}.tmp"
+            if grep -Eiq '<script|<foreignObject|javascript:|onload[[:space:]]*=' "${file}.tmp"; then
+              echo "Unsafe SVG content detected in ${file}.tmp"
+              exit 1
+            fi
+            mv "${file}.tmp" "${file}"
+          done
+
+      - name: Commit card snapshots if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dark_mode.svg light_mode.svg
+          if git diff --cached --quiet; then
+            echo "ASCII cards are already up to date."
+          else
+            git commit -m "feat: add gh-ascii profile cards"
+            git push origin HEAD:main
+          fi
