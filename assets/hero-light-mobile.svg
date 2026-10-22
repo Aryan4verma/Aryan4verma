@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="276" viewBox="0 0 480 276" role="img" aria-labelledby="title description">
+  <title id="title">Aryan Verma</title>
+  <desc id="description">Computer Science undergraduate. Applied AI and full-stack software. From scanned records to spoken interfaces.</desc>
+  <rect x="0.5" y="0.5" width="479" height="275" rx="12" fill="#f6f8fa" stroke="#cbd5df" />
+  <g transform="translate(29 27) scale(0.48)" fill="none" stroke="#0969da" stroke-width="5.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
+    <path d="M0 64 28 0 56 64 M11 40H45 M48 0 76 64 104 0" />
+  </g>
+  <g fill="none" stroke="#cbd5df" stroke-width="1" aria-hidden="true">
+    <path d="M328 28H451V72 M371 28V57H422V72 M422 28V44H451" />
+    <path d="M445 72H457 M451 66V78" stroke="#0969da" />
+  </g>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="28" y="113" fill="#17212d" font-size="43" font-weight="700" letter-spacing="1.1">ARYAN VERMA</text>
+    <text x="28" y="151" fill="#526171" font-size="28">Computer Science undergraduate</text>
+    <text x="28" y="183" fill="#0969da" font-size="28">Applied AI · Full-stack software</text>
+    <text x="28" y="228" fill="#17212d" font-size="26">From scanned records</text>
+    <text x="28" y="253" fill="#17212d" font-size="26">to spoken interfaces.</text>
+  </g>
+</svg>
