@@ -24,7 +24,7 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 CARDS_DIR = ROOT / "cards"
@@ -334,7 +334,7 @@ def style_block(fonts: dict[str, str], delay: float) -> str:
     if STATIC:
         static_rule = (
             ".enter,.tile-enter,.portrait-photo,.cell,.bar,.glint,.arrow{"
-            "animation:none!important;opacity:1!important;transform:none!important}"
+            "animation:none!important;opacity:1!important;transform:none!important;clip-path:none!important}"
             ".glint{opacity:0!important}.trace{stroke-dashoffset:0!important;}"
         )
     return f"""
@@ -349,7 +349,7 @@ def style_block(fonts: dict[str, str], delay: float) -> str:
 .mono{{font-family:'JetBrains Mono',monospace}}
 .enter{{opacity:0;transform:translateY(14px);animation:card-in .72s cubic-bezier(.22,1,.36,1) both;animation-delay:{delay:.2f}s}}
 .tile-enter{{opacity:0;transform-origin:50% 50%;animation:tile-in .86s cubic-bezier(.16,1,.3,1) both;animation-delay:{delay:.2f}s}}
-.portrait-photo{{opacity:0;transform:translateY(10px);animation:photo-reveal .88s cubic-bezier(.22,1,.36,1) .16s both}}
+.portrait-photo{{opacity:1;clip-path:inset(100% 0 0);animation:portrait-scan 1.8s steps(48,end) .14s both}}
 .cell{{opacity:0;transform-box:fill-box;transform-origin:center;animation:cell-pop .28s cubic-bezier(.16,1,.3,1) both}}
 .bar{{transform-box:fill-box;transform-origin:50% 100%;animation:bar-in .68s cubic-bezier(.22,1,.36,1) both}}
 .glint{{opacity:.2;animation:glint-sweep 7s ease-in-out 2.2s infinite both}}
@@ -357,13 +357,13 @@ def style_block(fonts: dict[str, str], delay: float) -> str:
 .trace{{fill:none;stroke:{ACCENT_LIGHT};stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}}
 @keyframes card-in{{to{{opacity:1;transform:translateY(0)}}}}
 @keyframes tile-in{{0%{{opacity:0;transform:translateY(24px) rotate(-1.3deg) scale(.975)}}75%{{opacity:1;transform:translateY(-2px) rotate(.2deg) scale(1.006)}}100%{{opacity:1;transform:translateY(0) rotate(0) scale(1)}}}}
-@keyframes photo-reveal{{to{{opacity:1;transform:translateY(0)}}}}
+@keyframes portrait-scan{{to{{clip-path:inset(0 0 0 0)}}}}
 @keyframes cell-pop{{from{{opacity:0;transform:scale(.38)}}to{{opacity:1;transform:scale(1)}}}}
 @keyframes bar-in{{from{{opacity:.35;transform:scaleY(.04)}}to{{opacity:1;transform:scaleY(1)}}}}
 @keyframes glint-sweep{{0%,72%,100%{{transform:translateX(-360px)}}84%{{transform:translateX(360px)}}}}
 @keyframes arrow-nudge{{0%,72%,100%{{transform:translateX(0)}}82%{{transform:translateX(4px)}}}}
 @media (prefers-reduced-motion:reduce){{
-  .enter,.tile-enter,.portrait-photo,.cell,.bar,.glint,.arrow{{animation:none!important;opacity:1!important;transform:none!important}}
+  .enter,.tile-enter,.portrait-photo,.cell,.bar,.glint,.arrow{{animation:none!important;opacity:1!important;transform:none!important;clip-path:none!important}}
   .glint{{opacity:0!important}}
   .trace{{stroke-dashoffset:0!important}}
 }}
@@ -408,15 +408,28 @@ def portrait_element() -> str:
         if "A" not in source.getbands() or source.getchannel("A").getextrema()[0] == 255:
             raise ValueError(f"Portrait must have transparent pixels: {path}")
         image = source.convert("RGBA")
-        image.thumbnail((720, 720), Image.Resampling.LANCZOS)
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG", optimize=True)
+        image.thumbnail((360, 360), Image.Resampling.LANCZOS)
+    gray = ImageOps.grayscale(image)
+    source_alpha = image.getchannel("A")
+    ink = tuple(int(INK_2[index:index + 2], 16) for index in (1, 3, 5))
+    pixels = []
+    for y in range(image.height):
+        scanline = 0.28 if y % 3 == 2 else 1.0
+        for x in range(image.width):
+            darkness = 1.0 - gray.getpixel((x, y)) / 255.0
+            alpha = source_alpha.getpixel((x, y))
+            density = 0.15 + darkness * 0.58
+            pixels.append((*ink, round(alpha * density * scanline)))
+    image = Image.new("RGBA", image.size)
+    image.putdata(pixels)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
     encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
     return f'''
 <image class="portrait-photo" x="632" y="12" width="360" height="360"
   preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,{encoded}"
-  aria-label="Portrait of Aryan Verma">
-  <title>Portrait of Aryan Verma</title>
+  aria-label="Halftone portrait of Aryan Verma">
+  <title>Animated halftone portrait of Aryan Verma</title>
 </image>
 '''
 
@@ -446,7 +459,7 @@ def render_hero(fonts: dict[str, str]) -> str:
         1000,
         390,
         f"{NAME} — computer science, applied AI, and full-stack software",
-        "Aryan Verma with an animated photographic portrait on a transparent background. CSE student building applied AI and full-stack software.",
+        "Aryan Verma with an animated horizontal halftone portrait derived from his photo on a transparent background. CSE student building applied AI and full-stack software.",
         body,
         fonts,
         0.0,

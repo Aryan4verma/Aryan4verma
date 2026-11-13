@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="cards/hero.svg" width="100%" alt="Aryan Verma, a computer science student building applied AI and full-stack software, with his profile photo cut out on a transparent background." />
+  <img src="cards/hero.svg" width="100%" alt="Aryan Verma, a computer science student building applied AI and full-stack software, with an animated horizontal halftone portrait derived from his profile photo." />
 </p>
 
 <p align="center">
