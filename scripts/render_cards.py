@@ -24,7 +24,7 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageOps
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 CARDS_DIR = ROOT / "cards"
@@ -349,7 +349,8 @@ def style_block(fonts: dict[str, str], delay: float) -> str:
 .mono{{font-family:'JetBrains Mono',monospace}}
 .enter{{opacity:0;transform:translateY(14px);animation:card-in .72s cubic-bezier(.22,1,.36,1) both;animation-delay:{delay:.2f}s}}
 .tile-enter{{opacity:0;transform-origin:50% 50%;animation:tile-in .86s cubic-bezier(.16,1,.3,1) both;animation-delay:{delay:.2f}s}}
-.portrait-photo{{opacity:1;clip-path:inset(100% 0 0);animation:portrait-scan 1.8s steps(48,end) .14s both}}
+.portrait-photo{{clip-path:inset(100% 0 0);animation:portrait-scan 1.8s steps(48,end) .14s both}}
+.portrait-engraving{{opacity:.24}}
 .cell{{opacity:0;transform-box:fill-box;transform-origin:center;animation:cell-pop .28s cubic-bezier(.16,1,.3,1) both}}
 .bar{{transform-box:fill-box;transform-origin:50% 100%;animation:bar-in .68s cubic-bezier(.22,1,.36,1) both}}
 .glint{{opacity:.2;animation:glint-sweep 7s ease-in-out 2.2s infinite both}}
@@ -409,28 +410,31 @@ def portrait_element() -> str:
             raise ValueError(f"Portrait must have transparent pixels: {path}")
         image = source.convert("RGBA")
         image.thumbnail((360, 360), Image.Resampling.LANCZOS)
-    gray = ImageOps.grayscale(image)
     source_alpha = image.getchannel("A")
     ink = tuple(int(INK_2[index:index + 2], 16) for index in (1, 3, 5))
-    pixels = []
+    pixels: list[tuple[int, int, int, int]] = []
     for y in range(image.height):
-        scanline = 0.28 if y % 3 == 2 else 1.0
         for x in range(image.width):
-            darkness = 1.0 - gray.getpixel((x, y)) / 255.0
             alpha = source_alpha.getpixel((x, y))
-            density = 0.15 + darkness * 0.58
-            pixels.append((*ink, round(alpha * density * scanline)))
-    image = Image.new("RGBA", image.size)
-    image.putdata(pixels)
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG", optimize=True)
-    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+            pixels.append((*ink, round(alpha * 0.88) if y % 3 == 2 else 0))
+    engraving = Image.new("RGBA", image.size)
+    engraving.putdata(pixels)
+
+    def encode_png(layer: Image.Image) -> str:
+        buffer = io.BytesIO()
+        layer.save(buffer, format="PNG", optimize=True)
+        return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+    photograph_data = encode_png(image)
+    engraving_data = encode_png(engraving)
     return f'''
-<image class="portrait-photo" x="632" y="12" width="360" height="360"
-  preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,{encoded}"
-  aria-label="Halftone portrait of Aryan Verma">
+<g class="portrait-photo" aria-label="Animated halftone portrait of Aryan Verma">
+  <image x="632" y="12" width="360" height="360"
+    preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,{photograph_data}"/>
+  <image class="portrait-engraving" x="632" y="12" width="360" height="360"
+    preserveAspectRatio="xMidYMid meet" xlink:href="data:image/png;base64,{engraving_data}"/>
   <title>Animated halftone portrait of Aryan Verma</title>
-</image>
+</g>
 '''
 
 
