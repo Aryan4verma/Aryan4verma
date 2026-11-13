@@ -12,7 +12,6 @@ import base64
 import calendar
 import json
 import math
-import mimetypes
 import os
 import shutil
 import subprocess
@@ -24,6 +23,7 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from PIL import Image, ImageEnhance, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 CARDS_DIR = ROOT / "cards"
@@ -52,25 +52,37 @@ GRAPH_LEVELS = {
 
 TILES = [
     {
-        "slug": "portfolio",
-        "label": "PORTFOLIO",
-        "title": "Explore the work",
-        "detail": "Builds, experiments & notes",
-        "url": "https://aryanverma21.vercel.app/",
+        "slug": "build",
+        "label": "BUILD",
+        "title": "3 featured projects",
+        "detail": "PRODUCT  ·  AI  ·  VOICE",
+        "url": "https://github.com/Aryan4verma?tab=repositories",
+        "background": NAVY,
+        "foreground": PAPER,
+        "muted": "#C5D0DF",
+        "accent": ACCENT_LIGHT,
     },
     {
-        "slug": "linkedin",
-        "label": "LINKEDIN",
-        "title": "Let’s connect",
-        "detail": "Professional updates & ideas",
+        "slug": "applied-ai",
+        "label": "APPLIED AI",
+        "title": "From scan to review",
+        "detail": "OCR  ·  DATA  ·  HUMAN CHECKS",
+        "url": "https://github.com/Aryan4verma/AI_Land_Record",
+        "background": ACCENT,
+        "foreground": PAPER,
+        "muted": "#F4E8D6",
+        "accent": "#F8D8A8",
+    },
+    {
+        "slug": "connect",
+        "label": "CONNECT",
+        "title": "Open to internships",
+        "detail": "SOFTWARE  ·  AI  ·  OPEN SOURCE",
         "url": "https://www.linkedin.com/in/aryan-verma-509678346/",
-    },
-    {
-        "slug": "email",
-        "label": "EMAIL",
-        "title": "Start a conversation",
-        "detail": "Software, AI & collaboration",
-        "url": "mailto:verma4aryan4@gmail.com",
+        "background": PAPER_ALT,
+        "foreground": INK,
+        "muted": INK_2,
+        "accent": ACCENT,
     },
 ]
 
@@ -108,9 +120,10 @@ PROJECTS = [
 ]
 
 FONT_SOURCES = {
-    "serif": ("InstrumentSerif-Regular.ttf", "Instrument Serif", "400"),
-    "sans": ("InterTight[wght].ttf", "Inter Tight", "400 700"),
-    "mono": ("JetBrainsMono[wght].ttf", "JetBrains Mono", "400 700"),
+    "serif": ("InstrumentSerif-Regular.ttf", "Instrument Serif", "400", "normal"),
+    "serif_italic": ("InstrumentSerif-Italic.ttf", "Instrument Serif", "400", "italic"),
+    "sans": ("InterTight[wght].ttf", "Inter Tight", "400 700", "normal"),
+    "mono": ("JetBrainsMono[wght].ttf", "JetBrains Mono", "400 700", "normal"),
 }
 
 
@@ -230,16 +243,23 @@ def font_text() -> str:
     strings = [
         NAME,
         USERNAME,
-        "CSE · APPLIED AI · FULL-STACK SOFTWARE",
-        "CSE student building applied AI and thoughtful full-stack software.",
-        "BUILDING ACROSS DATA, SOFTWARE & HUMAN INTERACTION",
-        "PORTFOLIO LINKEDIN EMAIL EXPLORE THE WORK LET’S CONNECT START A CONVERSATION",
-        "BUILDS, EXPERIMENTS & NOTES PROFESSIONAL UPDATES & IDEAS SOFTWARE, AI & COLLABORATION",
-        "GITHUB ACTIVITY LAST 12 MONTHS A YEAR, ONE DAY AT A TIME.",
-        "CURRENT STREAK ACTIVE DAYS BUSIEST DAY MONTHLY CONTRIBUTIONS CONTRIBUTIONS",
-        "OF THE LAST YEAR CURRENT STREAK DAYS",
-        "THE DAILY PRACTICE YOUR CONTRIBUTION GRAPH UPDATED",
-        "LESS MORE",
+        "COMPUTER SCIENCE · APPLIED AI · FULL-STACK SOFTWARE",
+        "CSE student building applied AI and full-stack software.",
+        "ARYANVERMA21.VERCEL.APP OPEN TO SOFTWARE AI INTERNSHIPS",
+        "GITHUB ACTIVITY LAST 12 MONTHS",
+        "A YEAR OF STEADY PRACTICE",
+        "CURRENT STREAK ACTIVE DAYS BUSIEST DAY BEST MONTH",
+        "CONTRIBUTIONS PER MONTH",
+        "THE DAILY PRACTICE YOUR CONTRIBUTION GRAPH",
+        "LESS MORE VIEW REPOSITORY VIEW REPO",
+        "PRODUCT SYSTEMS APPLIED AI VOICE INTERFACES",
+        "3 FEATURED PROJECTS FROM SCAN TO REVIEW OPEN TO INTERNSHIPS",
+        "PRODUCT AI VOICE OCR DATA HUMAN CHECKS SOFTWARE OPEN SOURCE",
+        "CONTROL ENGINEERING AI LAND RECORD JARVIS VOICE ASSISTANT",
+        "INDUSTRIAL CATALOG SCANNED RECORDS STREAMING CHAT",
+        "FROM PHOTO TO CODE VIEW LIVE SITE UPDATED CONTRIBUTIONS",
+        "ARYAN VERMA",
+        " .,:-=+*#%@",
     ]
     for tile in TILES:
         strings.extend([tile["label"], tile["title"], tile["detail"]])
@@ -257,7 +277,7 @@ def font_text() -> str:
     strings.extend(calendar.month_abbr[month].upper() for month in range(1, 13))
     strings.extend(calendar.day_abbr)
     strings.extend(str(number) for number in range(10))
-    strings.extend(["/", "·", "×", "→", "↗", "—", "&", "’", ".", ",", ":", "-"])
+    strings.extend(["/", "·", "×", "→", "↗", "—", "&", "’", ".", ",", ":", "-", "(", ")"])
     return " ".join(strings)
 
 
@@ -280,7 +300,7 @@ def embedded_fonts() -> dict[str, str]:
     result: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="profile-card-fonts-") as temp_dir:
         temp = Path(temp_dir)
-        for key, (filename, family, weight) in FONT_SOURCES.items():
+        for key, (filename, family, weight, font_style) in FONT_SOURCES.items():
             source = FONT_DIR / filename
             if not source.exists():
                 raise FileNotFoundError(f"Font source not found: {source}")
@@ -305,7 +325,7 @@ def embedded_fonts() -> dict[str, str]:
             result[key] = (
                 f"@font-face{{font-family:'{family}';"
                 f"src:url('data:font/woff;base64,{data}') format('woff');"
-                f"font-style:normal;font-weight:{weight};font-display:swap;}}"
+                f"font-style:{font_style};font-weight:{weight};font-display:swap;}}"
             )
     return result
 
@@ -314,24 +334,38 @@ def style_block(fonts: dict[str, str], delay: float) -> str:
     static_rule = ""
     if STATIC:
         static_rule = (
-            ".enter,.bar{animation:none!important;opacity:1!important;"
-            "transform:none!important}.trace{stroke-dashoffset:0!important;}"
+            ".enter,.tile-enter,.portrait-row,.cell,.bar,.glint,.arrow{"
+            "animation:none!important;opacity:1!important;transform:none!important}"
+            ".glint{opacity:0!important}.trace{stroke-dashoffset:0!important;}"
         )
     return f"""
 {fonts['serif']}
+{fonts['serif_italic']}
 {fonts['sans']}
 {fonts['mono']}
 *{{box-sizing:border-box}}
 .serif{{font-family:'Instrument Serif',Georgia,serif}}
+.serif-italic{{font-family:'Instrument Serif',Georgia,serif;font-style:italic}}
 .sans{{font-family:'Inter Tight',Arial,sans-serif}}
 .mono{{font-family:'JetBrains Mono',monospace}}
 .enter{{opacity:0;transform:translateY(14px);animation:card-in .72s cubic-bezier(.22,1,.36,1) both;animation-delay:{delay:.2f}s}}
-.bar{{transform-box:fill-box;transform-origin:50% 100%;animation:bar-in .72s cubic-bezier(.22,1,.36,1) both}}
+.tile-enter{{opacity:0;transform-origin:50% 50%;animation:tile-in .86s cubic-bezier(.16,1,.3,1) both;animation-delay:{delay:.2f}s}}
+.portrait-row{{opacity:0;animation:portrait-print .22s linear both}}
+.cell{{opacity:0;transform-box:fill-box;transform-origin:center;animation:cell-pop .28s cubic-bezier(.16,1,.3,1) both}}
+.bar{{transform-box:fill-box;transform-origin:50% 100%;animation:bar-in .68s cubic-bezier(.22,1,.36,1) both}}
+.glint{{opacity:.2;animation:glint-sweep 7s ease-in-out 2.2s infinite both}}
+.arrow{{transform-box:fill-box;transform-origin:center;animation:arrow-nudge 2.8s ease-in-out {delay + 0.7:.2f}s infinite}}
 .trace{{fill:none;stroke:{ACCENT_LIGHT};stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}}
 @keyframes card-in{{to{{opacity:1;transform:translateY(0)}}}}
+@keyframes tile-in{{0%{{opacity:0;transform:translateY(24px) rotate(-1.3deg) scale(.975)}}75%{{opacity:1;transform:translateY(-2px) rotate(.2deg) scale(1.006)}}100%{{opacity:1;transform:translateY(0) rotate(0) scale(1)}}}}
+@keyframes portrait-print{{to{{opacity:.88}}}}
+@keyframes cell-pop{{from{{opacity:0;transform:scale(.38)}}to{{opacity:1;transform:scale(1)}}}}
 @keyframes bar-in{{from{{opacity:.35;transform:scaleY(.04)}}to{{opacity:1;transform:scaleY(1)}}}}
+@keyframes glint-sweep{{0%,72%,100%{{transform:translateX(-360px)}}84%{{transform:translateX(360px)}}}}
+@keyframes arrow-nudge{{0%,72%,100%{{transform:translateX(0)}}82%{{transform:translateX(4px)}}}}
 @media (prefers-reduced-motion:reduce){{
-  .enter,.bar{{animation:none!important;opacity:1!important;transform:none!important}}
+  .enter,.tile-enter,.portrait-row,.cell,.bar,.glint,.arrow{{animation:none!important;opacity:1!important;transform:none!important}}
+  .glint{{opacity:0!important}}
   .trace{{stroke-dashoffset:0!important}}
 }}
 {static_rule}
@@ -358,67 +392,81 @@ def svg_document(
 
 def card_background(width: int, height: int) -> str:
     return (
-        f'<rect width="{width}" height="{height}" rx="20" fill="{PAPER}"/>'
+        f'<rect width="{width}" height="{height}" rx="16" fill="{PAPER}"/>'
         f'<rect x="1" y="1" width="{width - 2}" height="{height - 2}" '
-        f'rx="19" fill="none" stroke="{RULE}" stroke-width="2"/>'
+        f'rx="15" fill="none" stroke="{RULE}" stroke-width="2"/>'
     )
 
 
 def portrait_element() -> str:
     portrait = os.environ.get("PORTRAIT_PATH", "").strip()
-    if not portrait:
-        return ""
-    path = Path(portrait)
+    path = Path(portrait) if portrait else ROOT / "assets" / "portrait.jpg"
     if not path.is_absolute():
         path = ROOT / path
     if not path.is_file():
         raise FileNotFoundError(f"Portrait file not found: {path}")
-    mime = mimetypes.guess_type(path.name)[0]
-    if mime not in {"image/png", "image/jpeg", "image/webp"}:
-        raise ValueError("PORTRAIT_PATH must point to a PNG, JPEG, or WebP image.")
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    width, height = 100, 72
+    image = Image.open(path).convert("L")
+    image = ImageOps.fit(
+        image,
+        (width, height),
+        method=Image.Resampling.LANCZOS,
+        centering=(0.5, 0.12),
+    )
+    image = ImageEnhance.Contrast(ImageOps.autocontrast(image)).enhance(1.15)
+    ramp = " .,:-=+*#%@"
+    rows = []
+    for row_index in range(height):
+        chars = []
+        for pixel in range(width):
+            luminance = image.getpixel((pixel, row_index))
+            shade = round((255 - luminance) / 255 * (len(ramp) - 1))
+            chars.append(ramp[shade])
+        baseline = 49 + row_index * 4.15
+        row_delay = 0.28 + row_index * 0.014
+        rows.append(
+            f'<text class="portrait-row mono" style="animation-delay:{row_delay:.3f}s" '
+            f'xml:space="preserve" x="710" y="{baseline:.2f}" '
+            f'fill="{INK}" font-size="4.4">'
+            f'{xml_text("".join(chars))}</text>'
+        )
     return f'''
-<defs><clipPath id="portrait-clip"><rect x="810" y="48" width="132" height="204" rx="16"/></clipPath></defs>
-<image href="data:{mime};base64,{encoded}" x="810" y="48" width="132" height="204" preserveAspectRatio="xMidYMid slice" clip-path="url(#portrait-clip)"/>
-<rect x="810" y="48" width="132" height="204" rx="16" fill="none" stroke="{RULE}" stroke-width="2"/>
+<rect x="697" y="22" width="282" height="332" rx="14" fill="{PAPER_ALT}"/>
+<rect x="697.5" y="22.5" width="281" height="331" rx="13.5" fill="none" stroke="{RULE}"/>
+<g aria-label="ASCII portrait generated from Aryan's GitHub profile photo">
+  {''.join(rows)}
+</g>
+<path d="M710 368h34" stroke="{ACCENT}" stroke-width="2.5"/>
+<text x="753" y="372" class="mono" fill="{INK_3}" font-size="11" letter-spacing="1.2">FROM PHOTO · TO CODE</text>
 '''
 
 
 def render_hero(fonts: dict[str, str]) -> str:
     portrait = portrait_element()
-    if portrait:
-        motif = f'<g class="enter">{portrait}</g>'
-    else:
-        motif = f'''
-<g aria-hidden="true">
-  <circle cx="864" cy="150" r="99" fill="{PAPER_ALT}"/>
-  <circle cx="864" cy="150" r="72" fill="none" stroke="{RULE}" stroke-width="1.5"/>
-  <circle cx="864" cy="150" r="48" fill="none" stroke="{ACCENT_LIGHT}" stroke-width="2"/>
-  <path d="M774 150h180M864 60v180" stroke="{RULE}" stroke-width="1"/>
-  <circle cx="864" cy="150" r="9" fill="{ACCENT}"/>
-  <circle cx="914" cy="103" r="5" fill="{ACCENT_LIGHT}"/>
-  <rect x="790" y="235" width="148" height="28" rx="14" fill="{PAPER}" stroke="{RULE}"/>
-  <text x="864" y="254" text-anchor="middle" class="mono" fill="{INK_2}" font-size="12" letter-spacing="1.2">DATA / SOFTWARE / PEOPLE</text>
-</g>
-'''
     body = f'''
-{card_background(1000, 300)}
-<path d="M70 50h54" stroke="{ACCENT}" stroke-width="3"/>
+{card_background(1000, 390)}
+<path d="M70 42h54" stroke="{ACCENT}" stroke-width="3"/>
 <g class="enter">
-  <text x="70" y="80" class="mono" fill="{INK_3}" font-size="15" letter-spacing="2.2">CSE  ·  APPLIED AI  ·  FULL-STACK SOFTWARE</text>
-  <text x="65" y="166" class="serif" fill="{INK}" font-size="90" letter-spacing="-1.3">{xml_text(NAME)}</text>
-  <text x="72" y="216" class="sans" fill="{INK_2}" font-size="22">CSE student building applied AI and thoughtful full-stack software.</text>
-  <text x="72" y="263" class="mono" fill="{INK_3}" font-size="13" letter-spacing=".65">BUILDING ACROSS DATA, SOFTWARE &amp; HUMAN INTERACTION</text>
-  <circle cx="73" cy="285" r="3.5" fill="{ACCENT}"/>
-  <text x="86" y="290" class="mono" fill="{INK_3}" font-size="12" letter-spacing=".5">@{USERNAME}</text>
+  <text x="70" y="70" class="mono" fill="{INK_3}" font-size="14" letter-spacing="2.1">CSE  ·  APPLIED AI  ·  FULL-STACK SOFTWARE</text>
+  <text x="65" y="158" class="serif" fill="{INK}" font-size="86" letter-spacing="-1.3">Aryan</text>
+  <text x="62" y="239" class="serif-italic" fill="{INK}" font-size="96" letter-spacing="-1.8">Verma</text>
+  <text x="70" y="282" class="sans" fill="{INK_2}" font-size="20">CSE student building applied AI and full-stack software.</text>
+  <path d="M70 306h510" stroke="{RULE}" stroke-width="1"/>
+  <text x="70" y="334" class="mono" fill="{INK_3}" font-size="12" letter-spacing=".45">ARYANVERMA21.VERCEL.APP  /  OPEN TO SOFTWARE &amp; AI INTERNSHIPS</text>
 </g>
-{motif}
+<defs>
+  <clipPath id="verma-clip">
+    <text x="62" y="239" class="serif-italic" font-size="96" letter-spacing="-1.8">Verma</text>
+  </clipPath>
+</defs>
+<rect class="glint" x="85" y="154" width="64" height="98" fill="{ACCENT_LIGHT}" clip-path="url(#verma-clip)"/>
+{portrait}
 '''
     return svg_document(
         1000,
-        300,
-        f"{NAME} — applied AI and full-stack software",
-        "Computer science student building applied AI and thoughtful full-stack software.",
+        390,
+        f"{NAME} — computer science, applied AI, and full-stack software",
+        "Aryan Verma with an animated ASCII portrait generated from his GitHub profile photo. CSE student building applied AI and full-stack software.",
         body,
         fonts,
         0.0,
@@ -427,18 +475,21 @@ def render_hero(fonts: dict[str, str]) -> str:
 
 def render_tile(tile: dict[str, str], fonts: dict[str, str], delay: float) -> str:
     body = f'''
-{card_background(360, 138)}
-<g class="enter">
-  <text x="25" y="34" class="mono" fill="{ACCENT}" font-size="12" letter-spacing="1.5">{xml_text(tile["label"])}</text>
-  <text x="24" y="76" class="serif" fill="{INK}" font-size="29">{xml_text(tile["title"])}</text>
-  <text x="25" y="111" class="sans" fill="{INK_2}" font-size="13.5">{xml_text(tile["detail"])}</text>
-  <circle cx="321" cy="70" r="18" fill="{PAPER_ALT}" stroke="{RULE}"/>
-  <path d="M313 70h15m-6-6 6 6-6 6" fill="none" stroke="{ACCENT}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<defs><clipPath id="tile-clip"><rect width="360" height="150" rx="16"/></clipPath></defs>
+<rect width="360" height="150" rx="16" fill="{tile["background"]}"/>
+<rect x="1" y="1" width="358" height="148" rx="15" fill="none" stroke="{tile["accent"]}" stroke-opacity=".42"/>
+<g class="tile-enter" clip-path="url(#tile-clip)">
+  <path d="M0 0h5v150H0z" fill="{tile["accent"]}"/>
+  <text x="25" y="35" class="mono" fill="{tile["accent"]}" font-size="12" letter-spacing="1.8">{xml_text(tile["label"])}</text>
+  <text x="24" y="82" class="serif" fill="{tile["foreground"]}" font-size="28">{xml_text(tile["title"])}</text>
+  <text x="25" y="119" class="mono" fill="{tile["muted"]}" font-size="10.5" letter-spacing=".75">{xml_text(tile["detail"])}</text>
+  <path class="arrow" d="M322 32h13m-5-5 5 5-5 5" fill="none" stroke="{tile["accent"]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path class="glint" d="M-30 150 22 0h24L-6 150z" fill="{PAPER}" opacity=".22"/>
 </g>
 '''
     return svg_document(
         360,
-        138,
+        150,
         tile["title"],
         tile["detail"],
         body,
@@ -454,13 +505,19 @@ def render_contributions(
     fonts: dict[str, str],
     delay: float,
 ) -> str:
-    width, height = 1000, 425
-    chart_x, chart_width = 74, 852
-    baseline, chart_height = 355, 94
+    width, height = 1000, 444
+    chart_x, chart_width = 72, 856
+    baseline, chart_height = 370, 82
     bar_width = 42
     gap = (chart_width - 12 * bar_width) / 11
     max_value = max((month["count"] for month in stats["months"]), default=0) or 1
+    best_count = max((month["count"] for month in stats["months"]), default=0)
+    best_month = next(
+        (month for month in stats["months"] if month["count"] == best_count and best_count),
+        None,
+    )
     bars: list[str] = []
+    values: list[str] = []
     points: list[tuple[float, float]] = []
 
     for index, month in enumerate(stats["months"]):
@@ -468,14 +525,21 @@ def render_contributions(
         value = month["count"]
         bar_height = max(3, chart_height * value / max_value) if value else 2
         y = baseline - bar_height
-        fill = ACCENT if value else RULE
-        bar_delay = delay + 0.28 + index * 0.045
+        fill = "#F8D8A8" if best_count and value == best_count else ACCENT_LIGHT
+        if value == 0:
+            fill = "#31445C"
+        bar_delay = delay + 0.24 + index * 0.038
         bars.append(
             f'<rect class="bar" style="animation-delay:{bar_delay:.2f}s" '
             f'x="{x:.1f}" y="{y:.1f}" width="{bar_width}" height="{bar_height:.1f}" '
-            f'rx="4" fill="{fill}"><title>{xml_text(month["label"].title())} '
+            f'rx="5" fill="{fill}"><title>{xml_text(month["label"].title())} '
             f'{month["year"]}: {value} contributions</title></rect>'
         )
+        if value:
+            values.append(
+                f'<text x="{x + bar_width / 2:.1f}" y="{max(285, y - 8):.1f}" '
+                f'text-anchor="middle" class="mono" fill="#EAF0F9" font-size="11">{value}</text>'
+            )
         points.append((x + bar_width / 2, y - 4))
 
     path_data = "M" + " L".join(f"{x:.1f} {y:.1f}" for x, y in points)
@@ -488,45 +552,53 @@ def render_contributions(
     )
     if STATIC:
         trace = (
-            f'<path class="trace" d="{path_data}" stroke-dasharray="{path_length:.1f}" '
-            f'stroke-dashoffset="0"/>'
+            f'<path class="trace" d="{path_data}" stroke="{ACCENT_LIGHT}" '
+            f'stroke-dasharray="{path_length:.1f}" stroke-dashoffset="0"/>'
         )
     else:
         trace = (
-            f'<path class="trace" d="{path_data}" stroke-dasharray="{path_length:.1f}" '
-            f'stroke-dashoffset="{path_length:.1f}">'
+            f'<path class="trace" d="{path_data}" stroke="{ACCENT_LIGHT}" '
+            f'stroke-dasharray="{path_length:.1f}" stroke-dashoffset="{path_length:.1f}">'
             f'<animate attributeName="stroke-dashoffset" values="{path_length:.1f};0" '
             f'dur="1.15s" begin="{delay + 0.3:.2f}s" fill="freeze"/>'
             "</path>"
         )
 
     busiest_value = stats["busiest_label"]
-    total_note = f'{stats["total"]:,} contributions in this window'
+    total_note = f'{stats["total"]:,} CONTRIBUTIONS · UPDATED {updated}'
     month_labels = "".join(
-        f'<text x="{chart_x + i * (bar_width + gap) + bar_width / 2:.1f}" y="387" '
-        f'text-anchor="middle" class="mono" fill="{INK_3}" font-size="12">{month["label"]}</text>'
+        f'<text x="{chart_x + i * (bar_width + gap) + bar_width / 2:.1f}" y="407" '
+        f'text-anchor="middle" class="mono" fill="#A8BAD4" font-size="11.5">{month["label"]}</text>'
         for i, month in enumerate(stats["months"])
     )
+    best_note = (
+        f'{best_month["label"]} · {best_month["count"]} contributions'
+        if best_month
+        else "No contributions in this window"
+    )
     body = f'''
-{card_background(width, height)}
+<rect width="{width}" height="{height}" rx="16" fill="{NAVY}"/>
+<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="15" fill="none" stroke="#1C3357" stroke-width="2"/>
 <g class="enter">
-  <text x="58" y="52" class="mono" fill="{ACCENT}" font-size="14" letter-spacing="1.7">GITHUB ACTIVITY  /  LAST 12 MONTHS</text>
-  <text x="58" y="105" class="serif" fill="{INK}" font-size="48">A year, one day at a time.</text>
-  <text x="942" y="54" text-anchor="end" class="mono" fill="{INK_3}" font-size="13" letter-spacing=".4">{xml_text(total_note.upper())}</text>
-  <path d="M58 126h884" stroke="{RULE}" stroke-width="1.5"/>
-  <text x="68" y="158" class="mono" fill="{INK_3}" font-size="12" letter-spacing="1.1">CURRENT STREAK</text>
-  <text x="68" y="207" class="serif" fill="{INK}" font-size="39">{stats["streak"]} day{"s" if stats["streak"] != 1 else ""}</text>
-  <text x="68" y="229" class="sans" fill="{INK_2}" font-size="13.5">consecutive active days</text>
-  <path d="M341 145v88M624 145v88" stroke="{RULE}" stroke-width="1.5"/>
-  <text x="371" y="158" class="mono" fill="{INK_3}" font-size="12" letter-spacing="1.1">ACTIVE DAYS</text>
-  <text x="371" y="207" class="serif" fill="{INK}" font-size="39">{stats["active_days"]} days</text>
-  <text x="371" y="229" class="sans" fill="{INK_2}" font-size="13.5">of the last year</text>
-  <text x="654" y="158" class="mono" fill="{INK_3}" font-size="12" letter-spacing="1.1">BUSIEST DAY</text>
-  <text x="654" y="207" class="serif" fill="{INK}" font-size="39">{xml_text(busiest_value)}</text>
-  <text x="654" y="229" class="sans" fill="{INK_2}" font-size="13.5">{xml_text(stats["busiest_date"])} · contributions</text>
-  <text x="64" y="272" class="mono" fill="{INK_3}" font-size="12" letter-spacing="1.1">CONTRIBUTIONS PER MONTH</text>
-  <path d="M64 {baseline}h872" stroke="{RULE}" stroke-width="1.5"/>
+  <text x="58" y="51" class="mono" fill="{ACCENT_LIGHT}" font-size="13" letter-spacing="1.8">GITHUB ACTIVITY  /  LAST 12 MONTHS</text>
+  <text x="58" y="103" class="serif" fill="{PAPER}" font-size="47">A year of steady practice.</text>
+  <text x="942" y="52" text-anchor="end" class="mono" fill="#A8BAD4" font-size="12" letter-spacing=".35">{xml_text(total_note)}</text>
+  <path d="M58 122h884" stroke="#1C3357" stroke-width="1.5"/>
+  <text x="68" y="154" class="mono" fill="#A8BAD4" font-size="11.5" letter-spacing="1">CURRENT STREAK</text>
+  <text x="68" y="200" class="serif" fill="{PAPER}" font-size="37">{stats["streak"]} day{"s" if stats["streak"] != 1 else ""}</text>
+  <text x="68" y="222" class="sans" fill="#A8BAD4" font-size="13">consecutive active days</text>
+  <path d="M341 141v89M624 141v89" stroke="#1C3357" stroke-width="1.5"/>
+  <text x="371" y="154" class="mono" fill="#A8BAD4" font-size="11.5" letter-spacing="1">ACTIVE DAYS</text>
+  <text x="371" y="200" class="serif" fill="{PAPER}" font-size="37">{stats["active_days"]} days</text>
+  <text x="371" y="222" class="sans" fill="#A8BAD4" font-size="13">of the last year</text>
+  <text x="654" y="154" class="mono" fill="#A8BAD4" font-size="11.5" letter-spacing="1">BUSIEST DAY</text>
+  <text x="654" y="200" class="serif" fill="{PAPER}" font-size="37">{xml_text(busiest_value)}</text>
+  <text x="654" y="222" class="sans" fill="#A8BAD4" font-size="13">{xml_text(stats["busiest_date"])} · contributions</text>
+  <text x="64" y="266" class="mono" fill="#A8BAD4" font-size="11.5" letter-spacing=".9">CONTRIBUTIONS PER MONTH</text>
+  <text x="936" y="266" text-anchor="end" class="mono" fill="{ACCENT_LIGHT}" font-size="11.5" letter-spacing=".35">BEST  ·  {xml_text(best_note.upper())}</text>
+  <path d="M64 {baseline}h872" stroke="#31445C" stroke-width="1.5"/>
   {''.join(bars)}
+  {''.join(values)}
   {trace}
   {month_labels}
 </g>
@@ -537,7 +609,7 @@ def render_contributions(
         "GitHub contributions over the last 12 months",
         f'{stats["total"]} contributions, {stats["active_days"]} active days, '
         f'{stats["streak"]} day streak, busiest day {stats["busiest_date"]}. '
-        f"Updated {updated}.",
+        f"Updated {updated}. Best month: {best_note}.",
         body,
         fonts,
         delay,
@@ -547,27 +619,67 @@ def render_contributions(
 def render_project(
     project: dict[str, Any], fonts: dict[str, str], delay: float
 ) -> str:
+    width, height = 1000, 250
+    visuals = project_illustration(project)
     body = f'''
-{card_background(1000, 244)}
+{card_background(width, height)}
 <g class="enter">
-  <text x="62" y="55" class="mono" fill="{ACCENT}" font-size="14" letter-spacing="1.8">{project["number"]}  /  {xml_text(project["category"])}</text>
-  <text x="60" y="124" class="serif" fill="{INK}" font-size="57" letter-spacing="-.5">{xml_text(project["name"])}</text>
-  <text x="64" y="170" class="sans" fill="{INK_2}" font-size="20">{xml_text(project["description"])}</text>
-  <text x="64" y="213" class="mono" fill="{INK_3}" font-size="13.5" letter-spacing=".5">{xml_text(project["stack"])}</text>
-  <circle cx="911" cy="122" r="34" fill="{PAPER_ALT}" stroke="{RULE}" stroke-width="1.5"/>
-  <path d="M897 122h27m-10-10 10 10-10 10" fill="none" stroke="{ACCENT}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="911" y="185" text-anchor="middle" class="mono" fill="{INK_3}" font-size="10.5" letter-spacing=".8">VIEW REPO</text>
+  <text x="62" y="49" class="mono" fill="{ACCENT}" font-size="12.5" letter-spacing="1.8">{project["number"]}  /  {xml_text(project["category"])}</text>
+  <text x="60" y="112" class="serif" fill="{INK}" font-size="51" letter-spacing="-.5">{xml_text(project["name"])}</text>
+  <text x="64" y="154" class="sans" fill="{INK_2}" font-size="17.5">{xml_text(project["description"])}</text>
+  <text x="64" y="198" class="mono" fill="{INK_3}" font-size="11.5" letter-spacing=".3">{xml_text(project["stack"])}</text>
+  <path d="M64 218h640" stroke="{RULE}" stroke-width="1"/>
+  <text x="64" y="237" class="mono" fill="{INK_3}" font-size="10.5" letter-spacing=".8">VIEW REPOSITORY  ↗</text>
+  {visuals}
 </g>
 '''
     return svg_document(
-        1000,
-        244,
+        width,
+        height,
         project["name"],
         f'{project["description"]} Technologies: {project["stack"]}.',
         body,
         fonts,
         delay,
     )
+
+
+def project_illustration(project: dict[str, Any]) -> str:
+    """Draw a small, project-specific line illustration in the card margin."""
+    slug = project["slug"]
+    if slug == "control-engineering":
+        art = f'''
+<g fill="none" stroke="{ACCENT}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M783 92h42m62 0h45M783 151h42m62 0h45M783 92v59m149-59v59"/>
+  <path d="m825 76 31 16-31 16zm62 0-31 16 31 16zm-31 40v18m-8 0h16"/>
+  <circle cx="856" cy="151" r="18" fill="{PAPER_ALT}"/><path d="M856 141v10l7 5"/>
+  <path d="M795 73v-9h30m62 95v9h30" stroke="{RULE}"/>
+</g>
+<text x="856" y="208" text-anchor="middle" class="mono" fill="{INK_3}" font-size="9.5" letter-spacing="1">FLOW / CONTROL</text>'''
+    elif slug == "ai-land-record":
+        art = f'''
+<g fill="none" stroke="{RULE}" stroke-width="1.5" stroke-linejoin="round">
+  <path d="M817 56h69l26 26v113h-95z" fill="{PAPER_ALT}"/>
+  <path d="M886 56v27h26M832 99h63M832 113h48M832 127h58M832 141h37M832 158h63"/>
+</g>
+<g fill="none" stroke="{ACCENT}" stroke-width="2">
+  <path d="M826 94h26v25h-26zm41 33h28v24h-28zM826 151h22v16h-22z"/>
+  <path d="M814 73v-9h9m86 9v-9h-9m-86 104v9h9m86-9v9h-9" stroke-width="1.5"/>
+</g>
+<text x="856" y="218" text-anchor="middle" class="mono" fill="{INK_3}" font-size="9.5" letter-spacing="1">SCAN / STRUCTURE</text>'''
+    else:
+        bars = [8, 15, 23, 12, 31, 18, 26, 11, 34, 16, 24, 9, 29, 14, 21, 10]
+        wave = " ".join(
+            f"M{790 + i * 9} {122 - height / 2:.1f}v{height}"
+            for i, height in enumerate(bars)
+        )
+        art = f'''
+<circle cx="857" cy="121" r="66" fill="{PAPER_ALT}" stroke="{RULE}" stroke-width="1.5"/>
+<circle cx="857" cy="121" r="49" fill="none" stroke="{RULE}" stroke-width="1" stroke-dasharray="2 5"/>
+<circle cx="857" cy="121" r="30" fill="{PAPER}" stroke="{ACCENT}" stroke-width="1.5"/>
+<path d="{wave}" fill="none" stroke="{ACCENT}" stroke-width="2.2" stroke-linecap="round"/>
+<text x="857" y="213" text-anchor="middle" class="mono" fill="{INK_3}" font-size="9.5" letter-spacing="1">LISTEN / RESPOND</text>'''
+    return f'<g aria-hidden="true">{art}</g>'
 
 
 def render_graph(
@@ -598,8 +710,10 @@ def render_graph(
                 color = GRAPH_LEVELS[1]
             x = grid_x + column * (cell + gap)
             y = grid_y + row * (cell + gap)
+            cell_delay = delay + 0.10 + column * 0.008 + row * 0.001
             cells.append(
-                f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="2.2" '
+                f'<rect class="cell" style="animation-delay:{cell_delay:.3f}s" '
+                f'x="{x}" y="{y}" width="{cell}" height="{cell}" rx="2.2" '
                 f'fill="{color}"><title>{day.isoformat()}: {count} '
                 f'contribution{"s" if count != 1 else ""}</title></rect>'
             )
@@ -676,24 +790,24 @@ def main() -> None:
     fonts = embedded_fonts()
 
     write_card("hero.svg", render_hero(fonts))
+    write_card(
+        "contribution-graph.svg",
+        render_graph(days, stats, updated, fonts, 1.55),
+    )
+    write_card(
+        "contributions.svg",
+        render_contributions(days, stats, updated, fonts, 2.35),
+    )
     for index, tile in enumerate(TILES):
         write_card(
             f'tile-{tile["slug"]}.svg',
-            render_tile(tile, fonts, 0.40 + index * 0.13),
+            render_tile(tile, fonts, 3.18 + index * 0.18),
         )
-    write_card(
-        "contributions.svg",
-        render_contributions(days, stats, updated, fonts, 0.90),
-    )
     for index, project in enumerate(PROJECTS):
         write_card(
             f'project-{project["slug"]}.svg',
-            render_project(project, fonts, 1.28 + index * 0.30),
+            render_project(project, fonts, 4.12 + index * 0.30),
         )
-    write_card(
-        "contribution-graph.svg",
-        render_graph(days, stats, updated, fonts, 2.28),
-    )
     mode = "static final frame" if STATIC else "animated"
     print(f"Rendered 9 {mode} SVG cards into {CARDS_DIR.relative_to(ROOT)}/")
 

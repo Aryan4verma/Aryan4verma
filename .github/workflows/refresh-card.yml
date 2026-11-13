@@ -7,7 +7,7 @@ on:
       - README.md
       - scripts/render_cards.py
       - assets/fonts/**
-      - data/contributions.json
+      - assets/portrait.jpg
       - .github/workflows/refresh-card.yml
   schedule:
     - cron: "17 6 * * *"
@@ -32,8 +32,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install FontTools
-        run: python -m pip install fonttools
+      - name: Install renderer dependencies
+        run: python -m pip install fonttools pillow
 
       - name: Refresh contribution data
         uses: actions/github-script@v7
@@ -54,6 +54,7 @@ jobs:
             const query = [
               'query($login: String!, $from: DateTime!, $to: DateTime!) {',
               '  user(login: $login) {',
+              '    avatarUrl(size: 460)',
               '    contributionsCollection(from: $from, to: $to) {',
               '      contributionCalendar {',
               '        weeks {',
@@ -72,6 +73,13 @@ jobs:
             if (!result.user) {
               throw new Error('GitHub user not found: ' + username);
             }
+
+            const portraitResponse = await fetch(result.user.avatarUrl);
+            if (!portraitResponse.ok) {
+              throw new Error('Could not refresh public profile portrait: ' + portraitResponse.status);
+            }
+            fs.mkdirSync('assets', { recursive: true });
+            fs.writeFileSync('assets/portrait.jpg', Buffer.from(await portraitResponse.arrayBuffer()));
 
             const levelMap = {
               NONE: 0,
@@ -118,7 +126,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/contributions.json cards/*.svg
+          git add data/contributions.json assets/portrait.jpg cards/*.svg
           if git diff --cached --quiet; then
             echo "Profile cards are already up to date."
           else
