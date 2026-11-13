@@ -1,10 +1,14 @@
-name: Refresh ASCII profile card
+name: Refresh profile cards
 
 on:
   push:
     branches: [main]
     paths:
       - README.md
+      - scripts/render_cards.py
+      - assets/fonts/**
+      - data/contributions.json
+      - .github/workflows/refresh-card.yml
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
@@ -13,7 +17,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: refresh-ascii-profile-card
+  group: refresh-profile-cards
   cancel-in-progress: false
 
 jobs:
@@ -23,34 +27,101 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download and validate both themes
-        shell: bash
-        run: |
-          set -euo pipefail
-          for theme in dark light; do
-            file="${theme}_mode.svg"
-            curl -fLsS --retry 3 --retry-delay 5 --connect-timeout 15 --max-time 120 \
-              "https://gh.crafter.run/Aryan4verma?theme=${theme}&cols=140" \
-              -o "${file}.tmp"
-            test -s "${file}.tmp"
-            grep -qi '<svg' "${file}.tmp"
-            if grep -Eiq '<script|<foreignObject|javascript:|onload[[:space:]]*=' "${file}.tmp"; then
-              echo "Unsafe SVG content detected in ${file}.tmp"
-              exit 1
-            fi
-            mv "${file}.tmp" "${file}"
-          done
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Commit card snapshots if changed
+      - name: Install FontTools
+        run: python -m pip install fonttools
+
+      - name: Refresh contribution data
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROFILE_READ_TOKEN || github.token }}
+          script: |
+            const fs = require('fs');
+            const username = 'Aryan4verma';
+            const now = new Date();
+            const today = new Date(Date.UTC(
+              now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()
+            ));
+            const from = new Date(today);
+            from.setUTCDate(from.getUTCDate() - 364);
+            const to = new Date(today);
+            to.setUTCHours(23, 59, 59, 999);
+
+            const query = [
+              'query($login: String!, $from: DateTime!, $to: DateTime!) {',
+              '  user(login: $login) {',
+              '    contributionsCollection(from: $from, to: $to) {',
+              '      contributionCalendar {',
+              '        weeks {',
+              '          contributionDays { date contributionCount contributionLevel }',
+              '        }',
+              '      }',
+              '    }',
+              '  }',
+              '}',
+            ].join('\n');
+            const result = await github.graphql(query, {
+              login: username,
+              from: from.toISOString(),
+              to: to.toISOString(),
+            });
+            if (!result.user) {
+              throw new Error('GitHub user not found: ' + username);
+            }
+
+            const levelMap = {
+              NONE: 0,
+              FIRST_QUARTILE: 1,
+              SECOND_QUARTILE: 2,
+              THIRD_QUARTILE: 3,
+              FOURTH_QUARTILE: 4,
+            };
+            const values = new Map();
+            for (const week of result.user.contributionsCollection.contributionCalendar.weeks) {
+              for (const day of week.contributionDays) {
+                values.set(day.date, {
+                  count: day.contributionCount,
+                  level: levelMap[day.contributionLevel] ?? 0,
+                });
+              }
+            }
+
+            const days = [];
+            for (let offset = 0; offset <= 364; offset += 1) {
+              const day = new Date(from);
+              day.setUTCDate(from.getUTCDate() + offset);
+              const date = day.toISOString().slice(0, 10);
+              const value = values.get(date) ?? { count: 0, level: 0 };
+              days.push({ date, count: value.count, level: value.level });
+            }
+
+            fs.mkdirSync('data', { recursive: true });
+            fs.writeFileSync('data/contributions.json', JSON.stringify({
+              username,
+              updated_at: now.toISOString(),
+              from: from.toISOString().slice(0, 10),
+              to: today.toISOString().slice(0, 10),
+              total: days.reduce((sum, day) => sum + day.count, 0),
+              days,
+            }, null, 2) + '\n');
+
+      - name: Render animated SVG cards
+        run: python scripts/render_cards.py
+
+      - name: Commit refreshed data and cards
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dark_mode.svg light_mode.svg
+          git add data/contributions.json cards/*.svg
           if git diff --cached --quiet; then
-            echo "ASCII cards are already up to date."
+            echo "Profile cards are already up to date."
           else
-            git commit -m "feat: add gh-ascii profile cards"
+            git commit -m "chore: refresh profile cards"
             git push origin HEAD:main
           fi
