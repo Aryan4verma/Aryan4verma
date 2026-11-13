@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="cards/hero.svg" width="100%" alt="Aryan Verma, a computer science student building applied AI and full-stack software, with an ASCII portrait generated from his profile photo." />
+  <img src="cards/hero.svg" width="100%" alt="Aryan Verma, a computer science student building applied AI and full-stack software, with his profile photo cut out on a transparent background." />
 </p>
 
 <p align="center">
@@ -28,6 +28,7 @@ Regenerate locally with FontTools and Pillow installed:
   PowerShell: $env:STATIC='1'; python scripts/render_cards.py
   macOS/Linux: STATIC=1 python scripts/render_cards.py
 Remove STATIC or set it to 0 to regenerate the animated cards.
-The scheduled workflow refreshes data/contributions.json and the public profile portrait daily, then commits the data and cards.
+The scheduled workflow refreshes data/contributions.json daily and commits the data and cards.
+Place a transparent PNG cutout at assets/portrait-cutout.png to update the hero portrait.
 Set PROFILE_READ_TOKEN with read:user if private contribution counts are enabled on the profile.
 -->
